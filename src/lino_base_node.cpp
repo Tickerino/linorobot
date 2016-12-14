@@ -32,45 +32,27 @@
 #include <ros/ros.h>
 #include <tf/transform_broadcaster.h>
 #include <nav_msgs/Odometry.h>
-#include <geometry_msgs/Vector3.h>
-#include <sensor_msgs/Imu.h>
+#include <lino_msgs/Velocities.h>
 #include <math.h>
 
 double vel_x = 0.0;
+double vel_z = 0.0;
 double vel_dt = 0.0;
-double imu_dt = 0.0;
-double imu_z = 0.0;
 
 ros::Time last_loop_time(0.0);
 ros::Time last_vel_time(0.0);
 ros::Time last_imu_time(0.0);
 
 
-void vel_callback( const geometry_msgs::Vector3Stamped& vel) {
+void vel_callback( const lino_msgs::Velocities& vel) {
   //callback every time the robot's linear velocity is received
   ros::Time current_time = ros::Time::now();
 
-  vel_x = vel.vector.x;
+  vel_x = vel.linear_x;
+  vel_z = vel.angular_z;
 
   vel_dt = (current_time - last_vel_time).toSec();
   last_vel_time = current_time;
-}
-
-void imu_callback( const sensor_msgs::Imu& imu){
-  //callback every time the robot's angular velocity is received
-  ros::Time current_time = ros::Time::now();
-  //this block is to filter out imu noise
-  if(imu.angular_velocity.z > -0.03 && imu.angular_velocity.z < 0.03)
-  {
-    imu_z = 0.00;
-  }
-  else
-  {
-    imu_z = imu.angular_velocity.z;
-  }
-
-  imu_dt = (current_time - last_imu_time).toSec();
-  last_imu_time = current_time;
 }
 
 int main(int argc, char** argv){
@@ -78,7 +60,6 @@ int main(int argc, char** argv){
   ros::NodeHandle n;
   ros::NodeHandle nh_private_("~");
   ros::Subscriber sub = n.subscribe("raw_vel", 50, vel_callback);
-  ros::Subscriber imu_sub = n.subscribe("imu/data", 50, imu_callback);
   ros::Publisher odom_pub = n.advertise<nav_msgs::Odometry>("odom", 50);
   tf::TransformBroadcaster odom_broadcaster;
 
@@ -95,10 +76,10 @@ int main(int argc, char** argv){
     //linear velocity is the linear velocity published from the Teensy board(vel_x)
     double linear_velocity = vel_x;
     //angular velocity is the rotation in Z from imu_filter_madgwick's output
-    double angular_velocity = imu_z;
+    double angular_velocity = vel_z;
 
     //calculate angular displacement  θ = ω * t
-    double delta_theta = angular_velocity * imu_dt; //radians
+    double delta_theta = angular_velocity * vel_dt; //radians
     double delta_x = (linear_velocity * cos(theta)) * vel_dt; //m
     double delta_y = (linear_velocity * sin(theta)) * vel_dt; //m
 
@@ -143,7 +124,7 @@ int main(int argc, char** argv){
     odom.twist.twist.angular.x = 0.0;
     odom.twist.twist.angular.y = 0.0;
     //angular speed from IMU
-    odom.twist.twist.angular.z = imu_z;
+    odom.twist.twist.angular.z = angular_velocity;
 
     //TODO: include covariance matrix here
 

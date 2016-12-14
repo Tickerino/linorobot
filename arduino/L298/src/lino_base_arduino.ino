@@ -35,9 +35,6 @@
 
 #include <ros.h>
 
-//header file for publishing "rpm"
-#include <geometry_msgs/Vector3Stamped.h>
-
 //header file for cmd_subscribing to "cmd_vel"
 #include <geometry_msgs/Twist.h>
 
@@ -46,7 +43,7 @@
 
 //header files for imu
 #include <ros_arduino_msgs/RawImu.h>
-#include <geometry_msgs/Vector3.h>
+#include <lino_msgs/Velocities.h>
 
 #include <ros/time.h>
 
@@ -108,7 +105,7 @@ ros::Subscriber<lino_pid::linoPID> pid_sub("pid", pid_callback);
 ros_arduino_msgs::RawImu raw_imu_msg;
 ros::Publisher raw_imu_pub("raw_imu", &raw_imu_msg);
 
-geometry_msgs::Vector3Stamped raw_vel_msg;
+lino_msgs::Velocities raw_vel_msg;
 ros::Publisher raw_vel_pub("raw_vel", &raw_vel_msg);
 
 void setup()
@@ -150,24 +147,8 @@ void loop()
   //this block publishes velocity based on defined rate
   if ((millis() - publish_vel_time) >= (1000 / VEL_PUBLISH_RATE))
   {
-    publish_linear_velocity();
+    publish_velocities();
     publish_vel_time = millis();
-  }
-
-  //this block publishes the IMU data based on defined rate
-  if ((millis() - previous_imu_time) >= (1000 / IMU_PUBLISH_RATE))
-  {
-    //sanity check if the IMU exits
-    if (is_first)
-    {
-      check_imu();
-    }
-    else
-    {
-      //publish the IMU data
-      publish_imu();
-    }
-    previous_imu_time = millis();
   }
 
   //this block displays the encoder readings. change DEBUG to 0 if you don't want to display
@@ -236,7 +217,7 @@ void stop_base()
   required_angular_vel = 0;
 }
 
-void publish_linear_velocity()
+void publish_velocities()
 {
   // this function publishes the linear speed of the robot
 
@@ -247,12 +228,14 @@ void publish_linear_velocity()
   //calculate linear speed
   double linear_velocity = (average_rps * (WHEEL_DIAMETER * PI)); // m/s
 
-  //fill in the object
-  raw_vel_msg.header.stamp = nh.now();
-  raw_vel_msg.vector.x = linear_velocity;
-  raw_vel_msg.vector.y = 0.00;
-  raw_vel_msg.vector.z = 0.00;
 
+  double average_rpm_a = (motor2.current_rpm - motor1.current_rpm) / 2;
+  double average_rps_a = average_rpm_a / 60;
+  double angular_velocity =  (average_rps_a * (WHEEL_DIAMETER * PI)) / BASE_WIDTH;
+
+  //fill in the object
+  raw_vel_msg.linear_x = linear_velocity;
+  raw_vel_msg.angular_z = angular_velocity;
   //publish raw_vel_msg object to ROS
   raw_vel_pub.publish(&raw_vel_msg);
 }
